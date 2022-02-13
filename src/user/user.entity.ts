@@ -1,10 +1,12 @@
 import {
   BeforeInsert,
   Column,
-  Entity,
-  PrimaryGeneratedColumn, Unique,
+  Entity, JoinTable, ManyToMany, OneToMany,
+  PrimaryGeneratedColumn,
 } from 'typeorm';
 import { hash } from 'bcrypt';
+
+import { ArticleEntity } from '@app/article/article.entity';
 
 @Entity({ name: 'users' })
 export class UserEntity {
@@ -25,6 +27,13 @@ export class UserEntity {
 
   @Column({ select: false })
   password: string;
+
+  @OneToMany(() => ArticleEntity, article => article.author)
+  articles: ArticleEntity[];
+
+  @ManyToMany(() => ArticleEntity)
+  @JoinTable()
+  favorites: ArticleEntity[];
 
   @BeforeInsert()
   async hashPassword(): Promise<void> {
