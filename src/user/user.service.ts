@@ -1,4 +1,4 @@
-import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
+import { HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { sign } from 'jsonwebtoken';
@@ -9,6 +9,7 @@ import { UserEntity } from '@app/user/user.entity';
 import { UserResponseInterface } from '@app/user/types/userResponse.interface';
 import { LoginUserDto } from '@app/user/dto/loginUser.dto';
 import { UpdateUserDto } from '@app/user/dto/updateUser.dto';
+import { CustomHttpException } from '@app/shared/customHttp.exception';
 
 @Injectable()
 export class UserService {
@@ -22,7 +23,10 @@ export class UserService {
     const userByuserName = await this.userRepository.findOne({ username: createdUserDto.username});
 
     if (userByEmail || userByuserName) {
-      throw new HttpException('Email or username are taken', HttpStatus.UNPROCESSABLE_ENTITY);
+      throw new CustomHttpException(
+        'Email or username are taken',
+        HttpStatus.UNPROCESSABLE_ENTITY
+      );
     }
 
     const newUser = new UserEntity();
@@ -52,7 +56,10 @@ export class UserService {
       delete userByEmail.password;
       return userByEmail;
     } else {
-      throw new HttpException('Email or password are not correct', HttpStatus.FORBIDDEN);
+      throw new CustomHttpException(
+        'Email or password are not correct',
+        HttpStatus.FORBIDDEN
+      );
     }
   }
 

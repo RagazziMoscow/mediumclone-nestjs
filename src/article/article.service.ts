@@ -1,4 +1,4 @@
-import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
+import { HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DeleteResult, getRepository, Repository } from 'typeorm';
 import slugify from 'slugify';
@@ -11,6 +11,9 @@ import { UpdateArticleDto } from '@app/article/dto/updateArticle.dto';
 import { ArticlesQueryInterface } from '@app/article/types/articlesQuery.interface';
 import { ArticlesResponseInterface } from '@app/article/types/articlesResponse.interface';
 import { ArticleType } from '@app/article/types/article.type';
+import { FollowEntity } from '@app/profile/follow.entity';
+import { FeedQueryInterface } from '@app/article/types/feedQuery.interface';
+import { CustomHttpException } from '@app/shared/customHttp.exception';
 
 
 @Injectable()
@@ -20,7 +23,10 @@ export class ArticleService {
     private readonly articleRepository: Repository<ArticleEntity>,
 
     @InjectRepository(UserEntity)
-    private readonly userRepository: Repository<UserEntity>
+    private readonly userRepository: Repository<UserEntity>,
+
+    @InjectRepository(FollowEntity)
+    private readonly followRepository: Repository<FollowEntity>
   ) {}
 
   async findAll(query: ArticlesQueryInterface, currentUserId: number): Promise<ArticlesResponseInterface> {
@@ -90,6 +96,37 @@ export class ArticleService {
     return { articles: articlesWithFavorites, articlesCount };
   }
 
+  async getFeed(currentUserId: number, query: FeedQueryInterface): Promise<ArticlesResponseInterface> {
+     const follows = await this.followRepository.find({
+       followerId: currentUserId
+     });
+
+     if (!follows.length) {
+       return { articles: [], articlesCount: 0 }
+     }
+
+     const followingUserIds = follows.map(follow => follow.followingId);
+     const queryBuilder = getRepository(ArticleEntity)
+       .createQueryBuilder('articles')
+       .leftJoinAndSelect('articles.author', 'author')
+       .where('articles.authorId IN (:...ids)', { ids: followingUserIds })
+       .orderBy('articles.createdAt', 'DESC');
+
+     const articlesCount = await queryBuilder.getCount();
+
+     if (query.limit) {
+      queryBuilder.limit(query.limit);
+     }
+
+     if (query.offset) {
+       queryBuilder.offset(query.offset);
+     }
+
+     const articles = await queryBuilder.getMany();
+
+     return { articles, articlesCount };
+  }
+
 
   async createArticle(currentUser: UserEntity, createArticleDto: CreateArticleDto): Promise<ArticleEntity> {
     const article = new ArticleEntity();
@@ -108,7 +145,7 @@ export class ArticleService {
     const article = await this.articleRepository.findOne({ slug });
 
     if (!article) {
-      throw new HttpException('Article not found', HttpStatus.NOT_FOUND);
+      throw new CustomHttpException('Article not found', HttpStatus.NOT_FOUND);
     }
 
     return article;
@@ -183,7 +220,10 @@ export class ArticleService {
       return true;
     }
 
-    throw new HttpException('You are not an author', HttpStatus.FORBIDDEN);
+    throw new CustomHttpException(
+      'You are not an author',
+      HttpStatus.FORBIDDEN
+    );
   }
 
   private getSlug(title: string): string {
